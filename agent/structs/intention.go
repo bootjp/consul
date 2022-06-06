@@ -57,6 +57,11 @@ type Intention struct {
 	SourcePartition      string `json:",omitempty"`
 	DestinationPartition string `json:",omitempty"`
 
+	// SourcePeer cannot be a wildcard "*" and is not compatible with legacy
+	// intentions. Cannot be used with SourcePartition, as both represent the
+	// same level of tenancy (partition is local to cluster, peer is remote).
+	SourcePeer string `json:",omitempty"`
+
 	// SourceType is the type of the value for the source.
 	SourceType IntentionSourceType
 
@@ -399,6 +404,11 @@ func (x *Intention) String() string {
 		srcPartitionPart = x.SourcePartition + "/"
 	}
 
+	var srcPeerPart string
+	if x.SourcePeer != "" {
+		srcPeerPart = "peer(" + x.SourcePeer + ")/"
+	}
+
 	var dstPartitionPart string
 	if x.DestinationPartition != "" {
 		dstPartitionPart = x.DestinationPartition + "/"
@@ -411,8 +421,8 @@ func (x *Intention) String() string {
 		detailPart = "Action: " + strings.ToUpper(string(x.Action))
 	}
 
-	return fmt.Sprintf("%s%s/%s => %s%s/%s (%sPrecedence: %d, %s)",
-		srcPartitionPart, x.SourceNS, x.SourceName,
+	return fmt.Sprintf("%s%s%s/%s => %s%s/%s (%sPrecedence: %d, %s)",
+		srcPartitionPart, srcPeerPart, x.SourceNS, x.SourceName,
 		dstPartitionPart, x.DestinationNS, x.DestinationName,
 		idPart,
 		x.Precedence,
@@ -461,6 +471,7 @@ func (x *Intention) ToSourceIntention(legacy bool) *SourceIntention {
 	src := &SourceIntention{
 		Name:             x.SourceName,
 		EnterpriseMeta:   *x.SourceEnterpriseMeta(),
+		Peer:             x.SourcePeer,
 		Action:           x.Action,
 		Permissions:      nil, // explicitly not symmetric with the old APIs
 		Precedence:       0,   // Ignore, let it be computed.
@@ -561,7 +572,8 @@ type IntentionMutation struct {
 	ID          string
 	Destination ServiceName
 	Source      ServiceName
-	Value       *SourceIntention
+	// TODO(peering): check if this needs peer at higher level
+	Value *SourceIntention
 }
 
 // RequestDatacenter returns the datacenter for a given request.
@@ -650,6 +662,8 @@ type IntentionQueryMatch struct {
 
 // IntentionMatchEntry is a single entry for matching an intention.
 type IntentionMatchEntry struct {
+	// Peer is only applicable to intention match type "source"
+	Peer      string `json:",omitempty"`
 	Partition string `json:",omitempty"`
 	Namespace string
 	Name      string
@@ -666,6 +680,8 @@ type IntentionQueryCheck struct {
 	// TODO(partitions): check query works with partitions
 	SourcePartition      string `json:",omitempty"`
 	DestinationPartition string `json:",omitempty"`
+
+	SourcePeer string `json:",omitempty"`
 
 	// SourceType is the type of the value for the source.
 	SourceType IntentionSourceType
@@ -707,6 +723,8 @@ type IntentionQueryExact struct {
 	// TODO(partitions): check query works with partitions
 	SourcePartition      string `json:",omitempty"`
 	DestinationPartition string `json:",omitempty"`
+
+	SourcePeer string `json:",omitempty"`
 }
 
 // Validate is used to ensure all 4 required parameters are specified.
@@ -727,6 +745,7 @@ func (q *IntentionQueryExact) Validate() error {
 	return err
 }
 
+// TODO(peering): add support for listing peer
 type IntentionListRequest struct {
 	Datacenter         string
 	Legacy             bool `json:"-"`
@@ -755,12 +774,18 @@ func (s IntentionPrecedenceSorter) Less(i, j int) bool {
 		return a.Precedence > b.Precedence
 	}
 
-	// Tie break on lexicographic order of the tuple in canonical form (SrcPxn,
-	// SrcNS, Src, DstPxn, DstNS, Dst). This is arbitrary but it keeps sorting
-	// deterministic which is a nice property for consistency. It is arguably
-	// open to abuse if implementations rely on this however by definition the
-	// order among same-precedence rules is arbitrary and doesn't affect whether
-	// an allow or deny rule is acted on since all applicable rules are checked.
+	// Tie break on lexicographic order of the tuple in canonical form:
+	//
+	//   (SrcPeer, SrcPxn, SrcNS, Src, DstPxn, DstNS, Dst)
+	//
+	// This is arbitrary but it keeps sorting deterministic which is a nice
+	// property for consistency. It is arguably open to abuse if implementations
+	// rely on this however by definition the order among same-precedence rules
+	// is arbitrary and doesn't affect whether an allow or deny rule is acted on
+	// since all applicable rules are checked.
+	if a.SourcePeer != b.SourcePeer {
+		return a.SourcePeer < b.SourcePeer
+	}
 	if a.SourcePartition != b.SourcePartition {
 		return a.SourcePartition < b.SourcePartition
 	}

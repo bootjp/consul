@@ -123,6 +123,7 @@ func (e *ServiceIntentionsConfigEntry) ToIntention(src *SourceIntention) *Intent
 	ixn := &Intention{
 		ID:                   src.LegacyID,
 		Description:          src.Description,
+		SourcePeer:           src.Peer,
 		SourcePartition:      src.PartitionOrEmpty(),
 		SourceNS:             src.NamespaceOrDefault(),
 		SourceName:           src.Name,
@@ -259,6 +260,9 @@ type SourceIntention struct {
 
 	// formerly Intention.SourceNS
 	acl.EnterpriseMeta `hcl:",squash" mapstructure:",squash"`
+
+	// Peer is the name of the remote peer of the source service, if applicable.
+	Peer string `json:",omitempty"`
 }
 
 type IntentionPermission struct {
@@ -361,11 +365,11 @@ func (e *ServiceIntentionsConfigEntry) UpdateOver(rawPrev ConfigEntry) error {
 	}
 
 	var (
-		prevSourceByName     = make(map[ServiceName]*SourceIntention)
+		prevSourceByName     = make(map[string]*SourceIntention) // key: peer+ServiceName
 		prevSourceByLegacyID = make(map[string]*SourceIntention)
 	)
 	for _, src := range prev.Sources {
-		prevSourceByName[src.SourceServiceName()] = src
+		prevSourceByName[src.Peer+src.SourceServiceName().String()] = src
 		if src.LegacyID != "" {
 			prevSourceByLegacyID[src.LegacyID] = src
 		}
@@ -377,7 +381,7 @@ func (e *ServiceIntentionsConfigEntry) UpdateOver(rawPrev ConfigEntry) error {
 		}
 
 		// Check that the LegacyID fields are handled correctly during updates.
-		if prevSrc, ok := prevSourceByName[src.SourceServiceName()]; ok {
+		if prevSrc, ok := prevSourceByName[src.Peer+src.SourceServiceName().String()]; ok {
 			if prevSrc.LegacyID == "" {
 				return fmt.Errorf("Sources[%d].LegacyID: cannot set this field", i)
 			} else if src.LegacyID != prevSrc.LegacyID {
@@ -426,6 +430,7 @@ func (e *ServiceIntentionsConfigEntry) normalize(legacyWrite bool) error {
 		// If the source namespace is omitted it inherits that of the
 		// destination.
 		src.EnterpriseMeta.MergeNoWildcard(&e.EnterpriseMeta)
+		// TODO(peering): do we allow partition to default if there is a peer?
 		src.EnterpriseMeta.Normalize()
 
 		// Compute the precedence only AFTER normalizing namespaces since the
@@ -574,6 +579,10 @@ func (e *ServiceIntentionsConfigEntry) validate(legacyWrite bool) error {
 
 		if err := validateSourceIntentionEnterpriseMeta(&src.EnterpriseMeta, &e.EnterpriseMeta); err != nil {
 			return fmt.Errorf("Sources[%d].%v", i, err)
+		}
+
+		if src.Peer == WildcardSpecifier {
+			return fmt.Errorf("Sources[%d].Peer: cannot use wildcard '*' in peer")
 		}
 
 		// Length of opaque values
