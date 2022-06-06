@@ -1695,9 +1695,11 @@ func TestHandleUpdateService(t *testing.T) {
 					},
 				},
 			},
+			// Nil input is for the "api" service.
 			input: nil,
 			expect: map[string]structs.CheckServiceNodes{
 				"api": {},
+				// Existing redis service was not affected by deletion.
 				"redis": {
 					{
 						Node: &structs.Node{
@@ -1996,6 +1998,7 @@ func TestHandleUpdateService(t *testing.T) {
 							Partition: remoteMeta.Partition,
 							PeerName:  peerName,
 						},
+						// New service ID and checks for the api service.
 						Service: &pbservice.NodeService{
 							ID:             "new-api-v2",
 							Service:        "api",
