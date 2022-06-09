@@ -1187,7 +1187,7 @@ func (s *ResourceGenerator) makeFilterChainTerminatingGateway(cfgSnap *proxycfg.
 	// For Destinations of Hostname types, we use the dynamic forward proxy filter since this could be
 	// a wildcard match. We also send to the dynamic forward cluster
 	if dest != nil && dest.HasHostname() {
-		dynamicFilter, err := makeSNIDynamicForwardProxyFilter()
+		dynamicFilter, err := makeSNIDynamicForwardProxyFilter(dest.Port)
 		if err != nil {
 			return nil, err
 		}
@@ -1508,10 +1508,10 @@ func makeSNIClusterFilter() (*envoy_listener_v3.Filter, error) {
 	return makeFilter("envoy.filters.network.sni_cluster", &envoy_sni_cluster_v3.SniCluster{})
 }
 
-func makeSNIDynamicForwardProxyFilter() (*envoy_listener_v3.Filter, error) {
+func makeSNIDynamicForwardProxyFilter(upstreamPort int) (*envoy_listener_v3.Filter, error) {
 	return makeFilter("envoy.filters.network.sni_dynamic_forward_proxy", &envoy_sni_dynamic_forward_proxy_v3.FilterConfig{
 		DnsCacheConfig: getCommonDNSCacheConfiguration(),
-		PortSpecifier:  &envoy_sni_dynamic_forward_proxy_v3.FilterConfig_PortValue{PortValue: 443},
+		PortSpecifier:  &envoy_sni_dynamic_forward_proxy_v3.FilterConfig_PortValue{PortValue: uint32(upstreamPort)},
 	})
 }
 

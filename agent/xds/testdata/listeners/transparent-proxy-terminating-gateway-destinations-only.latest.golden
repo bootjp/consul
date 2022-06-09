@@ -34,9 +34,9 @@
                 "@type": "type.googleapis.com/envoy.extensions.filters.network.sni_dynamic_forward_proxy.v3.FilterConfig",
                 "dnsCacheConfig": {
                   "name": "dynamic_forward_proxy_cache_config",
-                  "dnsLookupFamily": "V4_ONLY"
+                  "dnsLookupFamily": "V4_PREFERRED"
                 },
-                "portValue": 443
+                "portValue": 8089
               }
             },
             {

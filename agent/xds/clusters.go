@@ -429,8 +429,8 @@ func (s *ResourceGenerator) makeDestinationClusters(cfgSnap *proxycfg.ConfigSnap
 		// If IP, create a cluster with the fake name.
 		if ip := net.ParseIP(dest.Address); ip != nil {
 			opts := clusterOpts{
-				name:       connect.ServiceSNI(svcName.Name, "", svcName.NamespaceOrDefault(), svcName.PartitionOrDefault(), cfgSnap.Datacenter, cfgSnap.Roots.TrustDomain),
-				ipEndpoint: dest,
+				name:            connect.ServiceSNI(svcName.Name, "", svcName.NamespaceOrDefault(), svcName.PartitionOrDefault(), cfgSnap.Datacenter, cfgSnap.Roots.TrustDomain),
+				addressEndpoint: dest,
 			}
 			cluster := s.makeTerminatingIPCluster(cfgSnap, opts)
 			clusters = append(clusters, cluster)
@@ -979,8 +979,8 @@ type clusterOpts struct {
 	// hostnameEndpoints is a list of endpoints with a hostname as their address
 	hostnameEndpoints structs.CheckServiceNodes
 
-	// ipEndpoint is a singular ip/port endpoint
-	ipEndpoint structs.DestinationConfig
+	// addressEndpoint is a singular ip/port endpoint
+	addressEndpoint structs.DestinationConfig
 }
 
 // makeGatewayCluster creates an Envoy cluster for a mesh or terminating gateway
@@ -1111,7 +1111,7 @@ func (s *ResourceGenerator) makeTerminatingIPCluster(snap *proxycfg.ConfigSnapsh
 	cluster.ClusterDiscoveryType = &discoveryType
 
 	endpoints := []*envoy_endpoint_v3.LbEndpoint{
-		makeEndpoint(opts.ipEndpoint.Address, opts.ipEndpoint.Port),
+		makeEndpoint(opts.addressEndpoint.Address, opts.addressEndpoint.Port),
 	}
 
 	cluster.LoadAssignment = &envoy_endpoint_v3.ClusterLoadAssignment{
@@ -1140,9 +1140,6 @@ func (s *ResourceGenerator) makeDynamicForwardProxyCluster(snap *proxycfg.Config
 	cluster := &envoy_cluster_v3.Cluster{
 		Name:           opts.name,
 		ConnectTimeout: durationpb.New(opts.connectTimeout),
-
-		// Having an empty config enables outlier detection with default config.
-		OutlierDetection: &envoy_cluster_v3.OutlierDetection{},
 	}
 
 	dynamicForwardProxyCluster, err := anypb.New(&envoy_cluster_dynamic_forward_proxy_v3.ClusterConfig{
@@ -1167,7 +1164,7 @@ func (s *ResourceGenerator) makeDynamicForwardProxyCluster(snap *proxycfg.Config
 func getCommonDNSCacheConfiguration() *envoy_common_dynamic_forward_proxy_v3.DnsCacheConfig {
 	return &envoy_common_dynamic_forward_proxy_v3.DnsCacheConfig{
 		Name:            dynamicForwardProxyClusterDNSCacheName,
-		DnsLookupFamily: envoy_cluster_v3.Cluster_V4_ONLY,
+		DnsLookupFamily: envoy_cluster_v3.Cluster_V4_PREFERRED,
 	}
 }
 

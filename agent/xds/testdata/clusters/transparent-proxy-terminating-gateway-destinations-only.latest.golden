@@ -10,15 +10,12 @@
           "@type": "type.googleapis.com/envoy.extensions.clusters.dynamic_forward_proxy.v3.ClusterConfig",
           "dnsCacheConfig": {
             "name": "dynamic_forward_proxy_cache_config",
-            "dnsLookupFamily": "V4_ONLY"
+            "dnsLookupFamily": "V4_PREFERRED"
           }
         }
       },
       "connectTimeout": "5s",
-      "lbPolicy": "CLUSTER_PROVIDED",
-      "outlierDetection": {
-
-      }
+      "lbPolicy": "CLUSTER_PROVIDED"
     },
     {
       "@type": "type.googleapis.com/envoy.config.cluster.v3.Cluster",
